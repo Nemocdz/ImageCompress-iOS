@@ -144,7 +144,6 @@ public class ImageCompress {
         
         // 若是 GIF，先用抽帧减少大小
         if resultData.imageFormat == .gif {
-            // 抽帧数参考 km 帖子 http://km.oa.com/group/23889/articles/show/298639?kmref=search&from_page=1&no=5
             let sampleCount = resultData.fitSampleCount
             if let data = compressImageData(resultData, sampleCount: sampleCount){
                 resultData = data
