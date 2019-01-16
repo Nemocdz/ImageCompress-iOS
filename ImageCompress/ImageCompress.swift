@@ -10,10 +10,11 @@ import Foundation
 import ImageIO
 
 public enum ColorConfig{
-    case ALPHA8
-    case RGB565
-    case ARGB8888
-    case RGBAF16
+    case alpha8
+    case rgb565
+    case argb8888
+    case rgbaF16
+    case unknown // 其余色彩配置
 }
 
 public class ImageCompress {
@@ -23,19 +24,23 @@ public class ImageCompress {
     ///   - rawData: 原始图片数据
     ///   - config: 色彩配置
     /// - Returns: 处理后数据
-    public static func changeColorConfig(_ rawData:Data, config:ColorConfig) -> Data?{
-        guard let imageSource = CGImageSourceCreateWithData(rawData as CFData, nil),
+    public static func changeColorWithImageData(_ rawData:Data, config:ColorConfig) -> Data?{
+        guard let imageConfig = config.imageConfig else {
+            return rawData
+        }
+    
+        guard let imageSource = CGImageSourceCreateWithData(rawData as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
             let writeData = CFDataCreateMutable(nil, 0),
             let imageType = CGImageSourceGetType(imageSource),
             let imageDestination = CGImageDestinationCreateWithData(writeData, imageType, 1, nil),
             let rawDataProvider = CGDataProvider(data: rawData as CFData),
             let imageFrame = CGImage(width: Int(rawData.imageSize.width),
                                      height: Int(rawData.imageSize.height),
-                                     bitsPerComponent: config.imageConfig.bitsPerComponent,
-                                     bitsPerPixel: config.imageConfig.bitsPerPixel,
+                                     bitsPerComponent: imageConfig.bitsPerComponent,
+                                     bitsPerPixel: imageConfig.bitsPerPixel,
                                      bytesPerRow: 0,
                                      space: CGColorSpaceCreateDeviceRGB(),
-                                     bitmapInfo: config.imageConfig.bitmapInfo,
+                                     bitmapInfo: imageConfig.bitmapInfo,
                                      provider: rawDataProvider,
                                      decode: nil,
                                      shouldInterpolate: true,
@@ -47,6 +52,19 @@ public class ImageCompress {
             return nil
         }
         return writeData as Data
+    }
+    
+    
+    /// 获取图片的色彩配置
+    ///
+    /// - Parameter rawData: 原始图片数据
+    /// - Returns: 色彩配置
+    public static func getColorConfigWithImageData(_ rawData:Data) -> ColorConfig{
+        guard let imageSource = CGImageSourceCreateWithData(rawData as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+            let imageFrame = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
+                return .unknown
+        }
+        return imageFrame.colorConfig
     }
     
     
@@ -326,26 +344,68 @@ extension ColorConfig{
         let bitmapInfo: CGBitmapInfo
     }
     
-    var imageConfig:CGImageConfig{
+    var imageConfig:CGImageConfig?{
         switch self {
-        case .ALPHA8:
-            return CGImageConfig(bitsPerComponent: 8, bitsPerPixel: 8, bitmapInfo: CGBitmapInfo(arrayLiteral: [
-                CGBitmapInfo(rawValue: CGImageAlphaInfo.alphaOnly.rawValue),
-                CGBitmapInfo(rawValue: CGImageByteOrderInfo.orderDefault.rawValue)]))
-        case .RGB565:
-            return CGImageConfig(bitsPerComponent: 5, bitsPerPixel: 16, bitmapInfo: CGBitmapInfo(arrayLiteral:
-                [CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipFirst.rawValue),
-                 CGBitmapInfo(rawValue: CGImageByteOrderInfo.orderDefault.rawValue)]))
-        case .ARGB8888:
-            return CGImageConfig(bitsPerComponent: 8, bitsPerPixel: 32, bitmapInfo: CGBitmapInfo(arrayLiteral:
-                [CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue),
-                 CGBitmapInfo(rawValue: CGImageByteOrderInfo.orderDefault.rawValue)]))
-        case .RGBAF16:
-            return CGImageConfig(bitsPerComponent: 16, bitsPerPixel: 64, bitmapInfo: CGBitmapInfo(arrayLiteral:
-                [CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
-                 CGBitmapInfo(rawValue: CGImageByteOrderInfo.orderDefault.rawValue),
-                 .floatComponents]))
+        case .alpha8:
+            return CGImageConfig(bitsPerComponent: 8, bitsPerPixel: 8, bitmapInfo: CGBitmapInfo(.alphaOnly))
+        case .rgb565:
+            return CGImageConfig(bitsPerComponent: 5, bitsPerPixel: 16, bitmapInfo: CGBitmapInfo(.noneSkipFirst))
+        case .argb8888:
+            return CGImageConfig(bitsPerComponent: 8, bitsPerPixel: 32, bitmapInfo: CGBitmapInfo(.premultipliedFirst))
+        case .rgbaF16:
+            return CGImageConfig(bitsPerComponent: 16, bitsPerPixel: 64, bitmapInfo: CGBitmapInfo(.premultipliedLast, true))
+        case .unknown:
+            return nil
         }
     }
 }
+
+extension CGBitmapInfo {
+    init(_ alphaInfo:CGImageAlphaInfo, _ isFloatComponents:Bool = false) {
+        var array = [
+            CGBitmapInfo(rawValue: alphaInfo.rawValue),
+            CGBitmapInfo(rawValue: CGImageByteOrderInfo.orderDefault.rawValue)
+        ]
+        
+        if isFloatComponents {
+            array.append(.floatComponents)
+        }
+        
+        self.init(array)
+    }
+}
+
+
+
+extension CGImage{
+    var colorConfig:ColorConfig{
+        if isColorConfig(.alpha8) {
+            return .alpha8
+        } else if isColorConfig(.rgb565) {
+            return .rgb565
+        } else if isColorConfig(.argb8888) {
+            return .argb8888
+        } else if isColorConfig(.rgbaF16) {
+            return .rgbaF16
+        } else {
+            return .unknown
+        }
+    }
+    
+    func isColorConfig(_ colorConfig:ColorConfig) -> Bool{
+        guard let imageConfig = colorConfig.imageConfig else {
+            return false
+        }
+        
+        if bitsPerComponent == imageConfig.bitsPerComponent &&
+            bitsPerPixel == imageConfig.bitsPerPixel &&
+            imageConfig.bitmapInfo.contains(CGBitmapInfo(alphaInfo)) &&
+            imageConfig.bitmapInfo.contains(.floatComponents) {
+            return true
+        } else {
+            return false
+        }
+    }
+}
+
 
