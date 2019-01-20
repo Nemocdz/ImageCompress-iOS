@@ -128,7 +128,7 @@ public class ImageCompress {
     ///   - rawData: 原始图片数据
     ///   - limitDataSize: 限制文件大小，单位字节
     /// - Returns: 处理后数据
-    @objc public static func compressImageData(_ rawData:Data, limitDataSize:Int) -> Data?{
+    public static func compressImageData(_ rawData:Data, limitDataSize:Int) -> Data?{
         guard rawData.count > limitDataSize else {
             return rawData
         }
