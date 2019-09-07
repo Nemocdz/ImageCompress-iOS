@@ -9,15 +9,15 @@
 import Foundation
 import ImageIO
 
-public enum ColorConfig{
-    case alpha8
-    case rgb565
-    case argb8888
-    case rgbaF16
-    case unknown // 其余色彩配置
-}
-
-public class ImageCompress {
+public enum ImageCompress {
+    public enum ColorConfig{
+        case alpha8
+        case rgb565
+        case argb8888
+        case rgbaF16
+        case unknown // 其余色彩配置
+    }
+    
     /// 改变图片到指定的色彩配置
     ///
     /// - Parameters:
@@ -84,7 +84,6 @@ public class ImageCompress {
             let imageType = CGImageSourceGetType(imageSource) else {
                 return nil
         }
-        
         
         let frameCount = CGImageSourceGetCount(imageSource)
         
@@ -303,7 +302,6 @@ extension Data{
         return imageFormat
     }
     
-    
     enum ImageFormat {
         case jpg, png, gif, unknown
     }
@@ -337,7 +335,7 @@ extension CGImageSource {
     }
 }
 
-extension ColorConfig{
+extension ImageCompress.ColorConfig{
     struct CGImageConfig{
         let bitsPerComponent:Int
         let bitsPerPixel:Int
@@ -375,10 +373,8 @@ extension CGBitmapInfo {
     }
 }
 
-
-
 extension CGImage{
-    var colorConfig:ColorConfig{
+    var colorConfig:ImageCompress.ColorConfig{
         if isColorConfig(.alpha8) {
             return .alpha8
         } else if isColorConfig(.rgb565) {
@@ -392,7 +388,7 @@ extension CGImage{
         }
     }
     
-    func isColorConfig(_ colorConfig:ColorConfig) -> Bool{
+    func isColorConfig(_ colorConfig:ImageCompress.ColorConfig) -> Bool{
         guard let imageConfig = colorConfig.imageConfig else {
             return false
         }
