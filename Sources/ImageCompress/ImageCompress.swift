@@ -253,12 +253,15 @@ public enum ImageCompress {
 }
 
 extension Data {
-    var fitSampleCount: Int {
+    var frameCount: Int {
         guard let imageSource = CGImageSourceCreateWithData(self as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) else {
             return 1
         }
 
-        let frameCount = CGImageSourceGetCount(imageSource)
+        return CGImageSourceGetCount(imageSource)
+    }
+    
+    var fitSampleCount: Int {
         var sampleCount = 1
         switch frameCount {
         case 2 ..< 8:
@@ -334,7 +337,7 @@ extension CGImageSource {
 
     var frameDurations: [Double] {
         let frameCount = CGImageSourceGetCount(self)
-        return (0 ..< frameCount).map { self.frameDurationAtIndex($0) }
+        return (0 ..< frameCount).map { frameDurationAtIndex($0) }
     }
 }
 
