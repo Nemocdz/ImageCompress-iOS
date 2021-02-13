@@ -10,30 +10,64 @@ import Foundation
 import ImageIO
 
 public enum ImageCompress {
-    public enum ColorConfig {
+}
+
+public extension ImageCompress {
+    enum ColorConfig: CaseIterable {
         case alpha8
         case rgb565
         case argb8888
         case rgbaF16
         case unknown // 其余色彩配置
     }
+}
 
+public extension ImageCompress {
+    enum CompressError: Error {
+        case imageIOError(ImageIOError)
+        case illegalFormat
+        case illegalColorConfig
+        case illegalLimitLongWidth(width: CGFloat)
+    }
+}
+
+public extension ImageCompress.CompressError {
+    enum ImageIOError {
+        case cgImageCreateFail
+        case thumbnailCreateFail(index: Int)
+        case sourceCreateFail
+        case destinationCreateFail
+        case destinationFinishFail
+    }
+}
+
+public extension ImageCompress {
     /// 改变图片到指定的色彩配置
     ///
     /// - Parameters:
     ///   - rawData: 原始图片数据
     ///   - config: 色彩配置
     /// - Returns: 处理后数据
-    public static func changeColorWithImageData(_ rawData: Data, config: ColorConfig) -> Data? {
-        guard let imageConfig = config.imageConfig else {
-            return rawData
+    static func changeColor(of rawData: Data, config: ColorConfig) throws -> Data {
+        guard rawData.imageFormat != .unknown else {
+            throw CompressError.illegalFormat
         }
-
+        
+        guard let imageConfig = config.imageConfig else {
+            throw CompressError.illegalFormat
+        }
+    
         guard let imageSource = CGImageSourceCreateWithData(rawData as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
               let writeData = CFDataCreateMutable(nil, 0),
-              let imageType = CGImageSourceGetType(imageSource),
-              let imageDestination = CGImageDestinationCreateWithData(writeData, imageType, 1, nil),
-              let rawDataProvider = CGDataProvider(data: rawData as CFData),
+              let imageType = CGImageSourceGetType(imageSource) else {
+            throw CompressError.imageIOError(.sourceCreateFail)
+        }
+        
+        guard let imageDestination = CGImageDestinationCreateWithData(writeData, imageType, 1, nil) else {
+            throw CompressError.imageIOError(.destinationCreateFail)
+        }
+        
+        guard let rawDataProvider = CGDataProvider(data: rawData as CFData),
               let imageFrame = CGImage(width: Int(rawData.imageSize.width),
                                        height: Int(rawData.imageSize.height),
                                        bitsPerComponent: imageConfig.bitsPerComponent,
@@ -46,11 +80,13 @@ public enum ImageCompress {
                                        shouldInterpolate: true,
                                        intent: .defaultIntent)
         else {
-            return nil
+            throw CompressError.imageIOError(.cgImageCreateFail)
         }
+        
         CGImageDestinationAddImage(imageDestination, imageFrame, nil)
+        
         guard CGImageDestinationFinalize(imageDestination) else {
-            return nil
+            throw CompressError.imageIOError(.destinationFinishFail)
         }
         return writeData as Data
     }
@@ -59,12 +95,13 @@ public enum ImageCompress {
     ///
     /// - Parameter rawData: 原始图片数据
     /// - Returns: 色彩配置
-    public static func getColorConfigWithImageData(_ rawData: Data) -> ColorConfig {
+    static func colorConfig(of rawData: Data) -> ColorConfig {
         guard let imageSource = CGImageSourceCreateWithData(rawData as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
               let imageFrame = CGImageSourceCreateImageAtIndex(imageSource, 0, nil)
         else {
             return .unknown
         }
+        
         return imageFrame.colorConfig
     }
 
@@ -74,22 +111,29 @@ public enum ImageCompress {
     ///   - rawData: 原始图片数据
     ///   - limitLongWidth: 长边限制
     /// - Returns: 处理后数据
-    public static func compressImageData(_ rawData: Data, limitLongWidth: CGFloat) -> Data? {
+    static func compressImageData(_ rawData: Data, limitLongWidth: CGFloat) throws -> Data {
+        guard rawData.imageFormat != .unknown else {
+            throw CompressError.illegalFormat
+        }
+
+        guard limitLongWidth > 0 else {
+            throw CompressError.illegalLimitLongWidth(width: limitLongWidth)
+        }
+        
         guard max(rawData.imageSize.height, rawData.imageSize.width) > limitLongWidth else {
             return rawData
         }
 
         guard let imageSource = CGImageSourceCreateWithData(rawData as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
               let writeData = CFDataCreateMutable(nil, 0),
-              let imageType = CGImageSourceGetType(imageSource)
-        else {
-            return nil
+              let imageType = CGImageSourceGetType(imageSource) else {
+            throw CompressError.imageIOError(.sourceCreateFail)
         }
 
         let frameCount = CGImageSourceGetCount(imageSource)
 
         guard let imageDestination = CGImageDestinationCreateWithData(writeData, imageType, frameCount, nil) else {
-            return nil
+            throw CompressError.imageIOError(.destinationCreateFail)
         }
 
         // 设置缩略图参数，kCGImageSourceThumbnailMaxPixelSize 为生成缩略图的大小。当设置为 800，如果图片本身大于 800*600，则生成后图片大小为 800*600，如果源图片为 700*500，则生成图片为 800*500
@@ -110,13 +154,14 @@ public enum ImageCompress {
             }
         } else {
             guard let resizedImageFrame = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, options) else {
-                return nil
+                throw CompressError.imageIOError(.thumbnailCreateFail(index: 0))
             }
+            
             CGImageDestinationAddImage(imageDestination, resizedImageFrame, nil)
         }
 
         guard CGImageDestinationFinalize(imageDestination) else {
-            return nil
+            throw CompressError.imageIOError(.destinationFinishFail)
         }
 
         return writeData as Data
@@ -128,7 +173,11 @@ public enum ImageCompress {
     ///   - rawData: 原始图片数据
     ///   - limitDataSize: 限制文件大小，单位字节
     /// - Returns: 处理后数据
-    public static func compressImageData(_ rawData: Data, limitDataSize: Int) -> Data? {
+    static func compressImageData(_ rawData: Data, limitDataSize: Int) throws -> Data {
+        guard rawData.imageFormat != .unknown else {
+            throw CompressError.illegalFormat
+        }
+        
         guard rawData.count > limitDataSize else {
             return rawData
         }
@@ -142,11 +191,7 @@ public enum ImageCompress {
             var minCompression: Double = 0
             for _ in 0 ..< 6 {
                 compression = (maxCompression + minCompression) / 2
-                if let data = compressImageData(resultData, compression: compression) {
-                    resultData = data
-                } else {
-                    return nil
-                }
+                resultData = try compressImageData(resultData, compression: compression)
                 if resultData.count < Int(CGFloat(limitDataSize) * 0.9) {
                     minCompression = compression
                 } else if resultData.count > limitDataSize {
@@ -163,26 +208,18 @@ public enum ImageCompress {
         // 若是 GIF，先用抽帧减少大小
         if resultData.imageFormat == .gif {
             let sampleCount = resultData.fitSampleCount
-            if let data = compressImageData(resultData, sampleCount: sampleCount) {
-                resultData = data
-            } else {
-                return nil
-            }
+            resultData = try compressImageData(resultData, sampleCount: sampleCount)
             if resultData.count <= limitDataSize {
                 return resultData
             }
         }
 
-        var longSideWidth = max(resultData.imageSize.height, resultData.imageSize.width)
+        var longWidth = max(resultData.imageSize.height, resultData.imageSize.width)
         // 图片尺寸按比率缩小，比率按字节比例逼近
         while resultData.count > limitDataSize {
             let ratio = sqrt(CGFloat(limitDataSize) / CGFloat(resultData.count))
-            longSideWidth *= ratio
-            if let data = compressImageData(resultData, limitLongWidth: longSideWidth) {
-                resultData = data
-            } else {
-                return nil
-            }
+            longWidth *= ratio
+            resultData = try compressImageData(resultData, limitLongWidth: longWidth)
         }
         return resultData
     }
@@ -193,12 +230,15 @@ public enum ImageCompress {
     ///   - rawData: 原始图片数据
     ///   - sampleCount: 采样频率，比如 3 则每三张用第一张，然后延长时间
     /// - Returns: 处理后数据
-    static func compressImageData(_ rawData: Data, sampleCount: Int) -> Data? {
+    static func compressImageData(_ rawData: Data, sampleCount: Int) throws -> Data {
+        guard rawData.imageFormat == .gif else {
+            throw CompressError.illegalFormat
+        }
+        
         guard let imageSource = CGImageSourceCreateWithData(rawData as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
               let writeData = CFDataCreateMutable(nil, 0),
-              let imageType = CGImageSourceGetType(imageSource)
-        else {
-            return nil
+              let imageType = CGImageSourceGetType(imageSource) else {
+            throw CompressError.imageIOError(.sourceCreateFail)
         }
 
         // 计算帧的间隔
@@ -211,7 +251,7 @@ public enum ImageCompress {
         let sampleImageFrames = (0 ..< frameDurations.count).filter { $0 % sampleCount == 0 }.compactMap { CGImageSourceCreateImageAtIndex(imageSource, $0, nil) }
 
         guard let imageDestination = CGImageDestinationCreateWithData(writeData, imageType, sampleImageFrames.count, nil) else {
-            return nil
+            throw CompressError.imageIOError(.destinationCreateFail)
         }
 
         // 每一帧图片都进行重新编码
@@ -222,7 +262,7 @@ public enum ImageCompress {
         }
 
         guard CGImageDestinationFinalize(imageDestination) else {
-            return nil
+            throw CompressError.imageIOError(.destinationFinishFail)
         }
 
         return writeData as Data
@@ -234,21 +274,39 @@ public enum ImageCompress {
     ///   - rawData: 原始图片数据
     ///   - compression: 压缩系数
     /// - Returns: 处理后数据
-    static func compressImageData(_ rawData: Data, compression: Double) -> Data? {
+    static func compressImageData(_ rawData: Data, compression: Double) throws -> Data {
+        guard rawData.imageFormat == .jpg else {
+            return rawData
+        }
+        
         guard let imageSource = CGImageSourceCreateWithData(rawData as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
               let writeData = CFDataCreateMutable(nil, 0),
-              let imageType = CGImageSourceGetType(imageSource),
-              let imageDestination = CGImageDestinationCreateWithData(writeData, imageType, 1, nil)
-        else {
-            return nil
+              let imageType = CGImageSourceGetType(imageSource) else {
+            throw CompressError.imageIOError(.sourceCreateFail)
+        }
+        
+        guard let imageDestination = CGImageDestinationCreateWithData(writeData, imageType, 1, nil) else {
+            throw CompressError.imageIOError(.destinationCreateFail)
         }
 
         let frameProperties = [kCGImageDestinationLossyCompressionQuality: compression] as CFDictionary
         CGImageDestinationAddImageFromSource(imageDestination, imageSource, 0, frameProperties)
+        
         guard CGImageDestinationFinalize(imageDestination) else {
-            return nil
+            throw CompressError.imageIOError(.destinationFinishFail)
         }
+        
         return writeData as Data
+    }
+}
+
+
+extension ImageCompress {
+    enum ImageFormat {
+        case jpg
+        case png
+        case gif
+        case unknown
     }
 }
 
@@ -291,11 +349,11 @@ extension Data {
         return CGSize(width: imageWidth, height: imageHeight)
     }
 
-    var imageFormat: ImageFormat {
+    var imageFormat: ImageCompress.ImageFormat {
         var headerData = [UInt8](repeating: 0, count: 3)
         copyBytes(to: &headerData, from: 0 ..< 3)
         let hexString = headerData.reduce("") { $0 + String($1 & 0xFF, radix: 16) }.uppercased()
-        var imageFormat = ImageFormat.unknown
+        var imageFormat = ImageCompress.ImageFormat.unknown
         switch hexString {
         case "FFD8FF":
             imageFormat = .jpg
@@ -307,14 +365,10 @@ extension Data {
         }
         return imageFormat
     }
-
-    enum ImageFormat {
-        case jpg, png, gif, unknown
-    }
 }
 
 extension CGImageSource {
-    func frameDurationAtIndex(_ index: Int) -> Double {
+    func frameDuration(at index: Int) -> Double {
         var frameDuration = Double(0.1)
         guard let frameProperties = CGImageSourceCopyPropertiesAtIndex(self, index, nil) as? [AnyHashable: Any], let gifProperties = frameProperties[kCGImagePropertyGIFDictionary] as? [AnyHashable: Any] else {
             return frameDuration
@@ -337,7 +391,7 @@ extension CGImageSource {
 
     var frameDurations: [Double] {
         let frameCount = CGImageSourceGetCount(self)
-        return (0 ..< frameCount).map { frameDurationAtIndex($0) }
+        return (0 ..< frameCount).map { frameDuration(at: $0) }
     }
 }
 
@@ -381,17 +435,7 @@ extension CGBitmapInfo {
 
 extension CGImage {
     var colorConfig: ImageCompress.ColorConfig {
-        if isColorConfig(.alpha8) {
-            return .alpha8
-        } else if isColorConfig(.rgb565) {
-            return .rgb565
-        } else if isColorConfig(.argb8888) {
-            return .argb8888
-        } else if isColorConfig(.rgbaF16) {
-            return .rgbaF16
-        } else {
-            return .unknown
-        }
+        return ImageCompress.ColorConfig.allCases.first(where: { isColorConfig($0) }) ?? .unknown
     }
 
     func isColorConfig(_ colorConfig: ImageCompress.ColorConfig) -> Bool {

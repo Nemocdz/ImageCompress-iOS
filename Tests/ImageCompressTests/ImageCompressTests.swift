@@ -2,23 +2,31 @@ import XCTest
 @testable import ImageCompress
 
 final class ImageCompressTests: XCTestCase {
-    func imageData(of format: Data.ImageFormat) -> Data {
+    func imageData(of format: ImageCompress.ImageFormat) -> Data {
         let url = Bundle.module.url(forResource: "test", withExtension: format.fileExtension)!
         return try! Data(contentsOf: url)
     }
     
+    func assertError(_ error: Error) {
+        XCTAssert(false, "\(error)")
+    }
+    
     func _testWidth(of raw: Data) {
-        guard let result = ImageCompress.compressImageData(raw, limitLongWidth: raw.testLongWidth) else {
-            return XCTAssert(false)
+        do {
+            let result = try ImageCompress.compressImageData(raw, limitLongWidth: raw.testLongWidth)
+            XCTAssert(result.imageSize.small(than: raw.testLongWidth))
+        } catch {
+            assertError(error)
         }
-        XCTAssert(result.imageSize.small(than: raw.testLongWidth))
     }
     
     func _testSize(of raw: Data) {
-        guard let result = ImageCompress.compressImageData(raw, limitDataSize: raw.testDataCount) else {
-            return XCTAssert(false)
+        do {
+            let result = try ImageCompress.compressImageData(raw, limitDataSize: raw.testDataCount)
+            XCTAssert(result.count < raw.testDataCount)
+        } catch {
+            assertError(error)
         }
-        XCTAssert(result.count < raw.testDataCount)
     }
         
     func testPNG() {
@@ -31,10 +39,12 @@ final class ImageCompressTests: XCTestCase {
         let raw = imageData(of: .jpg)
 
         func testJPGQuality() {
-            guard let result = ImageCompress.compressImageData(raw, compression: 0.0) else {
-                return XCTAssert(false)
+            do {
+                let result = try ImageCompress.compressImageData(raw, compression: 0.0)
+                XCTAssert(result.count <= raw.count)
+            } catch {
+                assertError(error)
             }
-            XCTAssert(result.count <= raw.count)
         }
         
         _testWidth(of: raw)
@@ -46,10 +56,12 @@ final class ImageCompressTests: XCTestCase {
         let raw = imageData(of: .gif)
         
         func testGIFSampleCount() {
-            guard let result = ImageCompress.compressImageData(raw, sampleCount: 2) else {
-                return XCTAssert(false)
+            do {
+                let result = try ImageCompress.compressImageData(raw, sampleCount: 2)
+                XCTAssert(result.frameCount < raw.frameCount)
+            } catch {
+                assertError(error)
             }
-            XCTAssert(result.frameCount <= raw.frameCount)
         }
         
         _testWidth(of: raw)
@@ -64,7 +76,7 @@ final class ImageCompressTests: XCTestCase {
     ]
 }
 
-fileprivate extension Data.ImageFormat {
+fileprivate extension ImageCompress.ImageFormat {
     var fileExtension: String {
         switch self {
         case .jpg: return "jpg"
