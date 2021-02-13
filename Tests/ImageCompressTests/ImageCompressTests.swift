@@ -28,6 +28,15 @@ final class ImageCompressTests: XCTestCase {
             assertError(error)
         }
     }
+    
+    func _testQuality(of raw: Data) {
+        do {
+            let result = try ImageCompress.compressImageData(raw, quality: 0)
+            XCTAssert(result.count <= raw.count)
+        } catch {
+            assertError(error)
+        }
+    }
         
     func testPNG() {
         let raw = imageData(of: .png)
@@ -35,21 +44,11 @@ final class ImageCompressTests: XCTestCase {
         _testWidth(of: raw)
     }
     
-    func testJPG() {
-        let raw = imageData(of: .jpg)
-
-        func testJPGQuality() {
-            do {
-                let result = try ImageCompress.compressImageData(raw, compression: 0.0)
-                XCTAssert(result.count <= raw.count)
-            } catch {
-                assertError(error)
-            }
-        }
-        
+    func testJPEG() {
+        let raw = imageData(of: .jpeg)
+        _testQuality(of: raw)
         _testWidth(of: raw)
         _testSize(of: raw)
-        testJPGQuality()
     }
     
     func testGIF() {
@@ -68,20 +67,29 @@ final class ImageCompressTests: XCTestCase {
         _testSize(of: raw)
         testGIFSampleCount()
     }
+    
+    func testHEIC() {
+        let raw = imageData(of: .heic)
+        _testQuality(of: raw)
+        _testWidth(of: raw)
+        _testSize(of: raw)
+    }
 
     static var allTests = [
         ("testGIF", testGIF),
-        ("testJPG", testJPG),
+        ("testJPEG", testJPEG),
         ("testPNG", testPNG),
+        ("testHEIC", testHEIC),
     ]
 }
 
 fileprivate extension ImageCompress.ImageFormat {
     var fileExtension: String {
         switch self {
-        case .jpg: return "jpg"
+        case .jpeg: return "jpg"
         case .png: return "png"
         case .gif: return "gif"
+        case .heic: return "heic"
         default: return ""
         }
     }
