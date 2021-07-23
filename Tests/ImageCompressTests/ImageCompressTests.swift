@@ -2,8 +2,8 @@ import XCTest
 @testable import ImageCompress
 
 final class ImageCompressTests: XCTestCase {
-    func imageData(of format: ImageCompress.ImageFormat) -> Data {
-        let url = Bundle.module.url(forResource: "test", withExtension: format.fileExtension)!
+    func imageData(name: String = "test", format: ImageCompress.ImageFormat) -> Data {
+        let url = Bundle.module.url(forResource: name, withExtension: format.fileExtension)!
         return try! Data(contentsOf: url)
     }
     
@@ -37,27 +37,37 @@ final class ImageCompressTests: XCTestCase {
             assertError(error)
         }
     }
+    
+    func _testDPI(of raw: Data) {
+        do {
+            let dpi = ImageCompress.defaultDPI
+            let result = try ImageCompress.changeDPI(of: raw, dpi: dpi)
+            XCTAssertEqual(result.imageDPI, dpi)
+        } catch {
+            assertError(error)
+        }
+    }
         
     func testPNG() {
-        let raw = imageData(of: .png)
+        let raw = imageData(format: .png)
         _testSize(of: raw)
         _testWidth(of: raw)
     }
     
     func testJPEG() {
-        let raw = imageData(of: .jpeg)
+        let raw = imageData(format: .jpeg)
         _testQuality(of: raw)
         _testWidth(of: raw)
         _testSize(of: raw)
     }
     
     func testGIF() {
-        let raw = imageData(of: .gif)
+        let raw = imageData(format: .gif)
         
         func testGIFSampleCount() {
             do {
                 let result = try ImageCompress.compressImageData(raw, sampleCount: 2)
-                XCTAssert(result.frameCount < raw.frameCount)
+                XCTAssert(result.imageFrameCount < raw.imageFrameCount)
             } catch {
                 assertError(error)
             }
@@ -69,9 +79,15 @@ final class ImageCompressTests: XCTestCase {
     }
     
     func testHEIC() {
-        let raw = imageData(of: .heic)
+        let raw = imageData(format: .heic)
         _testQuality(of: raw)
         _testWidth(of: raw)
+        _testSize(of: raw)
+    }
+    
+    func testDPI() {
+        let raw = imageData(name: "testDPI", format: .png)
+        _testDPI(of: raw)
         _testSize(of: raw)
     }
 
