@@ -90,12 +90,40 @@ final class ImageCompressTests: XCTestCase {
         _testDPI(of: raw)
         _testSize(of: raw)
     }
+    
+    func testChangeFormat() {
+        func changeFormat(from: ImageCompress.ImageFormat, to: ImageCompress.ImageFormat) {
+            let raw = imageData(format: from)
+            do {
+                let result = try ImageCompress.changeImageFormat(of: raw, format: to)
+                XCTAssertEqual(result.imageFormat, to)
+                print("change format from \(from) data length:\(raw.count), to \(to) data length:\(result.count)")
+            } catch {
+                assertError(error)
+            }
+        }
+        
+        changeFormat(from: .png, to: .jpeg)
+        changeFormat(from: .png, to: .heic)
+        
+        changeFormat(from: .heic, to: .png)
+        changeFormat(from: .heic, to: .jpeg)
+        
+        changeFormat(from: .jpeg, to: .heic)
+        changeFormat(from: .jpeg, to: .png)
+
+        changeFormat(from: .dng, to: .jpeg)
+        changeFormat(from: .dng, to: .png)
+        changeFormat(from: .dng, to: .heic)
+    }
 
     static var allTests = [
         ("testGIF", testGIF),
         ("testJPEG", testJPEG),
         ("testPNG", testPNG),
         ("testHEIC", testHEIC),
+        ("testDPI", testDPI),
+        ("testChangeFormat", testChangeFormat),
     ]
 }
 
@@ -106,7 +134,7 @@ fileprivate extension ImageCompress.ImageFormat {
         case .png: return "png"
         case .gif: return "gif"
         case .heic: return "heic"
-        default: return ""
+        case .dng: return "dng"
         }
     }
 }

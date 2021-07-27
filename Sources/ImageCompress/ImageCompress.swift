@@ -36,7 +36,7 @@ public extension ImageCompress.Error {
         case cgImageMissing(index: Int)
         case thumbnailMissing(index: Int)
         case sourceMissing
-        case destinationMissing
+        case destinationMissing(type: String)
         case destinationFinalizeFail
     }
 }
@@ -66,7 +66,7 @@ public extension ImageCompress {
         }
 
         guard let imageDestination = CGImageDestinationCreateWithData(writeData, imageType, 1, nil) else {
-            throw Error.imageIOError(.destinationMissing)
+            throw Error.imageIOError(.destinationMissing(type: imageType as String))
         }
 
         guard let rawDataProvider = CGDataProvider(data: rawData as CFData),
@@ -115,7 +115,7 @@ public extension ImageCompress {
     /// - Throws: ImageCompress.Error
     /// - Returns: 处理后数据
     static func compressImageData(_ rawData: Data, limitLongWidth: CGFloat) throws -> Data {
-        guard rawData.imageFormat != .unknown else {
+        guard rawData.imageFormat != nil else {
             throw Error.unsupportedFormat
         }
 
@@ -137,7 +137,7 @@ public extension ImageCompress {
         let frameCount = CGImageSourceGetCount(imageSource)
 
         guard let imageDestination = CGImageDestinationCreateWithData(writeData, imageType, frameCount, nil) else {
-            throw Error.imageIOError(.destinationMissing)
+            throw Error.imageIOError(.destinationMissing(type: imageType as String))
         }
 
         // 设置缩略图参数，kCGImageSourceThumbnailMaxPixelSize 为生成缩略图的大小。当设置为 800，如果图片本身大于 800*600，则生成后图片大小为 800*600，如果源图片为 700*500，则生成图片为 800*500
@@ -179,7 +179,7 @@ public extension ImageCompress {
     /// - Throws: ImageCompress.Error
     /// - Returns: 处理后数据
     static func compressImageData(_ rawData: Data, limitDataSize: Int) throws -> Data {
-        guard rawData.imageFormat != .unknown else {
+        guard rawData.imageFormat != nil else {
             throw Error.unsupportedFormat
         }
 
@@ -311,7 +311,7 @@ public extension ImageCompress {
         }
 
         guard let imageDestination = CGImageDestinationCreateWithData(writeData, imageType, 1, nil) else {
-            throw Error.imageIOError(.destinationMissing)
+            throw Error.imageIOError(.destinationMissing(type: imageType as String))
         }
 
         let frameProperties = [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary
@@ -343,12 +343,37 @@ public extension ImageCompress {
         }
 
         guard let imageDestination = CGImageDestinationCreateWithData(writeData, imageType, 1, nil) else {
-            throw Error.imageIOError(.destinationMissing)
+            throw Error.imageIOError(.destinationMissing(type: imageType as String))
         }
 
         let frameProperties = [kCGImagePropertyDPIWidth: dpi.width, kCGImagePropertyDPIHeight: dpi.height] as CFDictionary
         CGImageDestinationAddImageFromSource(imageDestination, imageSource, 0, frameProperties)
 
+        guard CGImageDestinationFinalize(imageDestination) else {
+            throw Error.imageIOError(.destinationFinalizeFail)
+        }
+        return writeData as Data
+    }
+    
+    /// 更改图片格式
+    /// - Parameters:
+    ///   - rawData: 原始数据
+    ///   - format: 目标图片格式
+    /// - Throws: ImageCompress.Error
+    /// - Returns: 处理后数据
+    static func changeImageFormat(of rawData: Data, format: ImageFormat) throws -> Data {
+        guard let imageSource = CGImageSourceCreateWithData(rawData as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+              let writeData = CFDataCreateMutable(nil, 0),
+              let imageType = CGImageSourceGetType(imageSource)
+        else {
+            throw Error.imageIOError(.sourceMissing)
+        }
+
+        guard let imageDestination = CGImageDestinationCreateWithData(writeData, format.uniformTypeIdentifer as CFString, 1, nil) else {
+            throw Error.imageIOError(.destinationMissing(type: imageType as String))
+        }
+
+        CGImageDestinationAddImageFromSource(imageDestination, imageSource, 0, nil)
         guard CGImageDestinationFinalize(imageDestination) else {
             throw Error.imageIOError(.destinationFinalizeFail)
         }
@@ -360,23 +385,25 @@ public extension ImageCompress {
 
 extension ImageCompress {
     static func isSupportQualityCompression(of data: Data) -> Bool {
+        guard let imageFormat = data.imageFormat else { return false }
         var supportedFormats: Set<ImageFormat> = [.jpeg]
         if isHeicSupported {
             supportedFormats.insert(.heic)
         }
-        return supportedFormats.contains(data.imageFormat)
+        return supportedFormats.contains(imageFormat)
     }
     
     static func isSupportColorConfig(of data: Data) -> Bool {
+        guard let imageFormat = data.imageFormat else { return false }
         let supportedFormats: Set<ImageFormat> = [.jpeg, .heic, .png]
-        return supportedFormats.contains(data.imageFormat)
+        return supportedFormats.contains(imageFormat)
     }
 
     static var isHeicSupported: Bool {
-        guard let ids = CGImageDestinationCopyTypeIdentifiers() as? [String] else {
+        guard let uniformTypeIdentifers = CGImageDestinationCopyTypeIdentifiers() as? [String] else {
             return false
         }
-        return ids.contains("public.heic")
+        return uniformTypeIdentifers.contains(ImageFormat.heic.uniformTypeIdentifer)
     }
     
     static func fitSampleCount(of frameCount: Int) -> Int {
@@ -397,13 +424,30 @@ extension ImageCompress {
     }
 }
 
-extension ImageCompress {
+public extension ImageCompress {
     enum ImageFormat: CaseIterable {
-        case unknown
         case jpeg
         case png
         case gif
         case heic
+        case dng
+    }
+}
+
+extension ImageCompress.ImageFormat {
+    var uniformTypeIdentifer: String {
+        switch self {
+        case .heic:
+            return "public.heic"
+        case .gif:
+            return "com.compuserve.gif"
+        case .png:
+            return "public.png"
+        case .jpeg:
+            return "public.jpeg"
+        case .dng:
+            return "com.adobe.raw-image"
+        }
     }
 }
 
@@ -427,9 +471,9 @@ extension Data {
         return CGSize(width: imageWidth, height: imageHeight)
     }
 
-    var imageFormat: ImageCompress.ImageFormat {
+    var imageFormat: ImageCompress.ImageFormat? {
         guard count >= 8 else {
-            return .unknown
+            return nil
         }
 
         var headerData = [UInt8](repeating: 0, count: 8)
@@ -443,9 +487,10 @@ extension Data {
             return .gif
         } else if isHeicFormat {
             return .heic
+        } else if headerData.hasPrefix([0x4D, 0x4D, 0x00, 0x2A]) || headerData.hasPrefix([0x49, 0x49, 0x00, 0x2A]) {
+            return .dng
         }
-
-        return .unknown
+        return nil
     }
 
     var isHeicFormat: Bool {
@@ -456,7 +501,7 @@ extension Data {
         guard let testString = String(data: subdata(in: 4 ..< 12), encoding: .ascii) else {
             return false
         }
-        guard ["ftypheic", "ftypheix", "ftyphevc", "ftyphevx"].contains(testString.lowercased()) else {
+        guard Set(["ftypheic", "ftypheix", "ftyphevc", "ftyphevx"]).contains(testString.lowercased()) else {
             return false
         }
         return true
