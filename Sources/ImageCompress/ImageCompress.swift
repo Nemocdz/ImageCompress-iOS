@@ -12,16 +12,6 @@ import ImageIO
 public enum ImageCompress {}
 
 public extension ImageCompress {
-    enum ColorConfig: CaseIterable {
-        case alpha8
-        case rgb565
-        case argb8888
-        case rgbaF16
-        case unknown // 其余色彩配置
-    }
-}
-
-public extension ImageCompress {
     enum Error: Swift.Error {
         case imageIOError(ImageIOError)
         case unsupportedFormat
@@ -42,71 +32,6 @@ public extension ImageCompress.Error {
 }
 
 public extension ImageCompress {
-    /// 改变图片到指定的色彩配置
-    ///
-    /// - Parameters:
-    ///   - rawData: 原始图片数据
-    ///   - config: 色彩配置
-    /// - Throws: ImageCompress.Error
-    /// - Returns: 处理后数据
-    static func changeColor(of rawData: Data, config: ColorConfig) throws -> Data {
-        guard isSupportColorConfig(of: rawData) else {
-            throw Error.unsupportedFormat
-        }
-
-        guard let imageConfig = config.imageConfig else {
-            throw Error.unsupportedColorConfig
-        }
-
-        guard let imageSource = CGImageSourceCreateWithData(rawData as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
-              let writeData = CFDataCreateMutable(nil, 0),
-              let imageType = CGImageSourceGetType(imageSource)
-        else {
-            throw Error.imageIOError(.sourceMissing)
-        }
-
-        guard let imageDestination = CGImageDestinationCreateWithData(writeData, imageType, 1, nil) else {
-            throw Error.imageIOError(.destinationMissing(type: imageType as String))
-        }
-
-        guard let rawDataProvider = CGDataProvider(data: rawData as CFData),
-              let imageFrame = CGImage(width: Int(rawData.imageSize.width),
-                                       height: Int(rawData.imageSize.height),
-                                       bitsPerComponent: imageConfig.bitsPerComponent,
-                                       bitsPerPixel: imageConfig.bitsPerPixel,
-                                       bytesPerRow: 0,
-                                       space: CGColorSpaceCreateDeviceRGB(),
-                                       bitmapInfo: imageConfig.bitmapInfo,
-                                       provider: rawDataProvider,
-                                       decode: nil,
-                                       shouldInterpolate: true,
-                                       intent: .defaultIntent)
-        else {
-            throw Error.imageIOError(.cgImageMissing(index: 0))
-        }
-
-        CGImageDestinationAddImage(imageDestination, imageFrame, nil)
-
-        guard CGImageDestinationFinalize(imageDestination) else {
-            throw Error.imageIOError(.destinationFinalizeFail)
-        }
-        return writeData as Data
-    }
-
-    /// 获取图片的色彩配置
-    ///
-    /// - Parameter rawData: 原始图片数据
-    /// - Returns: 色彩配置
-    static func colorConfig(of rawData: Data) -> ColorConfig {
-        guard let imageSource = CGImageSourceCreateWithData(rawData as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
-              let imageFrame = CGImageSourceCreateImageAtIndex(imageSource, 0, nil)
-        else {
-            return .unknown
-        }
-
-        return imageFrame.colorConfig
-    }
-
     /// 同步压缩图片数据长边到指定数值
     ///
     /// - Parameters:
@@ -299,7 +224,7 @@ public extension ImageCompress {
             throw Error.unsupportedFormat
         }
 
-        guard quality >= 0 && quality <= 1.0 else {
+        guard quality >= 0, quality <= 1.0 else {
             throw Error.illegalQuality(quality: quality)
         }
 
@@ -323,64 +248,6 @@ public extension ImageCompress {
 
         return writeData as Data
     }
-
-    /// 设置图片的 DPI
-    /// - Parameters:
-    ///   - rawData: 原始图片数据
-    ///   - dpi: 目标 DPI
-    /// - Throws: ImageCompress.Error
-    /// - Returns: 处理后数据
-    static func changeDPI(of rawData: Data, dpi: CGSize = defaultDPI) throws -> Data {
-        guard rawData.imageDPI != .zero else {
-            return rawData
-        }
-
-        guard let imageSource = CGImageSourceCreateWithData(rawData as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
-              let writeData = CFDataCreateMutable(nil, 0),
-              let imageType = CGImageSourceGetType(imageSource)
-        else {
-            throw Error.imageIOError(.sourceMissing)
-        }
-
-        guard let imageDestination = CGImageDestinationCreateWithData(writeData, imageType, 1, nil) else {
-            throw Error.imageIOError(.destinationMissing(type: imageType as String))
-        }
-
-        let frameProperties = [kCGImagePropertyDPIWidth: dpi.width, kCGImagePropertyDPIHeight: dpi.height] as CFDictionary
-        CGImageDestinationAddImageFromSource(imageDestination, imageSource, 0, frameProperties)
-
-        guard CGImageDestinationFinalize(imageDestination) else {
-            throw Error.imageIOError(.destinationFinalizeFail)
-        }
-        return writeData as Data
-    }
-    
-    /// 更改图片格式
-    /// - Parameters:
-    ///   - rawData: 原始数据
-    ///   - format: 目标图片格式
-    /// - Throws: ImageCompress.Error
-    /// - Returns: 处理后数据
-    static func changeImageFormat(of rawData: Data, format: ImageFormat) throws -> Data {
-        guard let imageSource = CGImageSourceCreateWithData(rawData as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
-              let writeData = CFDataCreateMutable(nil, 0),
-              let imageType = CGImageSourceGetType(imageSource)
-        else {
-            throw Error.imageIOError(.sourceMissing)
-        }
-
-        guard let imageDestination = CGImageDestinationCreateWithData(writeData, format.uniformTypeIdentifer as CFString, 1, nil) else {
-            throw Error.imageIOError(.destinationMissing(type: imageType as String))
-        }
-
-        CGImageDestinationAddImageFromSource(imageDestination, imageSource, 0, nil)
-        guard CGImageDestinationFinalize(imageDestination) else {
-            throw Error.imageIOError(.destinationFinalizeFail)
-        }
-        return writeData as Data
-    }
-
-    static let defaultDPI = CGSize(width: 72, height: 72)
 }
 
 extension ImageCompress {
@@ -392,12 +259,6 @@ extension ImageCompress {
         }
         return supportedFormats.contains(imageFormat)
     }
-    
-    static func isSupportColorConfig(of data: Data) -> Bool {
-        guard let imageFormat = data.imageFormat else { return false }
-        let supportedFormats: Set<ImageFormat> = [.jpeg, .heic, .png]
-        return supportedFormats.contains(imageFormat)
-    }
 
     static var isHeicSupported: Bool {
         guard let uniformTypeIdentifers = CGImageDestinationCopyTypeIdentifiers() as? [String] else {
@@ -405,7 +266,7 @@ extension ImageCompress {
         }
         return uniformTypeIdentifers.contains(ImageFormat.heic.uniformTypeIdentifer)
     }
-    
+
     static func fitSampleCount(of frameCount: Int) -> Int {
         switch frameCount {
         case 2 ..< 8:
@@ -420,33 +281,6 @@ extension ImageCompress {
             return 6
         default:
             return 1
-        }
-    }
-}
-
-public extension ImageCompress {
-    enum ImageFormat: CaseIterable {
-        case jpeg
-        case png
-        case gif
-        case heic
-        case dng
-    }
-}
-
-extension ImageCompress.ImageFormat {
-    var uniformTypeIdentifer: String {
-        switch self {
-        case .heic:
-            return "public.heic"
-        case .gif:
-            return "com.compuserve.gif"
-        case .png:
-            return "public.png"
-        case .jpeg:
-            return "public.jpeg"
-        case .dng:
-            return "com.adobe.raw-image"
         }
     }
 }
@@ -470,64 +304,9 @@ extension Data {
         }
         return CGSize(width: imageWidth, height: imageHeight)
     }
-
-    var imageFormat: ImageCompress.ImageFormat? {
-        guard count >= 8 else {
-            return nil
-        }
-
-        var headerData = [UInt8](repeating: 0, count: 8)
-        copyBytes(to: &headerData, from: 0 ..< 8)
-
-        if headerData.hasPrefix([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
-            return .png
-        } else if headerData.hasPrefix([0xFF, 0xD8, 0xFF]) {
-            return .jpeg
-        } else if headerData.hasPrefix([0x47, 0x49, 0x46]) {
-            return .gif
-        } else if isHeicFormat {
-            return .heic
-        } else if headerData.hasPrefix([0x4D, 0x4D, 0x00, 0x2A]) || headerData.hasPrefix([0x49, 0x49, 0x00, 0x2A]) {
-            return .dng
-        }
-        return nil
-    }
-
-    var isHeicFormat: Bool {
-        guard count >= 12 else {
-            return false
-        }
-
-        guard let testString = String(data: subdata(in: 4 ..< 12), encoding: .ascii) else {
-            return false
-        }
-        guard Set(["ftypheic", "ftypheix", "ftyphevc", "ftyphevx"]).contains(testString.lowercased()) else {
-            return false
-        }
-        return true
-    }
-
-    var imageDPI: CGSize {
-        guard let imageSource = CGImageSourceCreateWithData(self as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
-              let properties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [AnyHashable: Any],
-              let dpiHeight = properties[kCGImagePropertyDPIHeight] as? CGFloat,
-              let dpiWidth = properties[kCGImagePropertyDPIWidth] as? CGFloat
-        else {
-            return .zero
-        }
-
-        return CGSize(width: dpiWidth, height: dpiHeight)
-    }
 }
 
-extension Array where Element == UInt8 {
-    func hasPrefix(_ prefix: [UInt8]) -> Bool {
-        guard prefix.count <= count else { return false }
-        return prefix.enumerated().allSatisfy { self[$0.offset] == $0.element }
-    }
-}
-
-extension CGImageSource {
+fileprivate extension CGImageSource {
     func frameDuration(at index: Int) -> Double {
         var frameDuration = Double(0.1)
         guard let frameProperties = CGImageSourceCopyPropertiesAtIndex(self, index, nil) as? [AnyHashable: Any], let gifProperties = frameProperties[kCGImagePropertyGIFDictionary] as? [AnyHashable: Any] else {
@@ -552,65 +331,5 @@ extension CGImageSource {
     var frameDurations: [Double] {
         let frameCount = CGImageSourceGetCount(self)
         return (0 ..< frameCount).map { frameDuration(at: $0) }
-    }
-}
-
-extension ImageCompress.ColorConfig {
-    struct CGImageConfig {
-        let bitsPerComponent: Int
-        let bitsPerPixel: Int
-        let bitmapInfo: CGBitmapInfo
-    }
-
-    var imageConfig: CGImageConfig? {
-        switch self {
-        case .alpha8:
-            return CGImageConfig(bitsPerComponent: 8, bitsPerPixel: 8, bitmapInfo: CGBitmapInfo(.alphaOnly))
-        case .rgb565:
-            return CGImageConfig(bitsPerComponent: 5, bitsPerPixel: 16, bitmapInfo: CGBitmapInfo(.noneSkipFirst))
-        case .argb8888:
-            return CGImageConfig(bitsPerComponent: 8, bitsPerPixel: 32, bitmapInfo: CGBitmapInfo(.premultipliedFirst))
-        case .rgbaF16:
-            return CGImageConfig(bitsPerComponent: 16, bitsPerPixel: 64, bitmapInfo: CGBitmapInfo(.premultipliedLast, true))
-        case .unknown:
-            return nil
-        }
-    }
-}
-
-extension CGBitmapInfo {
-    init(_ alphaInfo: CGImageAlphaInfo, _ isFloatComponents: Bool = false) {
-        var array = [
-            CGBitmapInfo(rawValue: alphaInfo.rawValue),
-            CGBitmapInfo(rawValue: CGImageByteOrderInfo.orderDefault.rawValue),
-        ]
-
-        if isFloatComponents {
-            array.append(.floatComponents)
-        }
-
-        self.init(array)
-    }
-}
-
-extension CGImage {
-    var colorConfig: ImageCompress.ColorConfig {
-        return ImageCompress.ColorConfig.allCases.first(where: { isColorConfig($0) }) ?? .unknown
-    }
-
-    func isColorConfig(_ colorConfig: ImageCompress.ColorConfig) -> Bool {
-        guard let imageConfig = colorConfig.imageConfig else {
-            return false
-        }
-
-        if bitsPerComponent == imageConfig.bitsPerComponent,
-           bitsPerPixel == imageConfig.bitsPerPixel,
-           imageConfig.bitmapInfo.contains(CGBitmapInfo(alphaInfo)),
-           imageConfig.bitmapInfo.contains(.floatComponents)
-        {
-            return true
-        } else {
-            return false
-        }
     }
 }

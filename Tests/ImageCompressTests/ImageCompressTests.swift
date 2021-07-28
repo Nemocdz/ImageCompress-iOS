@@ -4,7 +4,7 @@ import XCTest
 final class ImageCompressTests: XCTestCase {
     func imageData(name: String = "test", format: ImageCompress.ImageFormat) -> Data {
         let url = Bundle.module.url(forResource: name, withExtension: format.fileExtension)!
-        return try! Data(contentsOf: url)
+        return try! giData(contentsOf: url)
     }
     
     func assertError(_ error: Error) {
