@@ -7,6 +7,8 @@
 
 import Foundation
 import ImageIO
+import CoreServices.LaunchServices.UTCoreTypes
+import struct AVFoundation.AVFileType
 
 public extension ImageCompress {
     enum ImageFormat: CaseIterable {
@@ -94,15 +96,15 @@ extension ImageCompress.ImageFormat {
     var uniformTypeIdentifer: String {
         switch self {
         case .heic:
-            return "public.heic"
+            return AVFileType.heic.rawValue
         case .gif:
-            return "com.compuserve.gif"
+            return kUTTypeGIF as String
         case .png:
-            return "public.png"
+            return kUTTypePNG as String
         case .jpeg:
-            return "public.jpeg"
+            return kUTTypeJPEG as String
         case .dng:
-            return "com.adobe.raw-image"
+            return AVFileType.dng.rawValue
         }
     }
 }

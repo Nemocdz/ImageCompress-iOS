@@ -264,7 +264,7 @@ extension ImageCompress {
         guard let uniformTypeIdentifers = CGImageDestinationCopyTypeIdentifiers() as? [String] else {
             return false
         }
-        return uniformTypeIdentifers.contains(ImageFormat.heic.uniformTypeIdentifer)
+        return Set(uniformTypeIdentifers).contains(ImageFormat.heic.uniformTypeIdentifer)
     }
 
     static func fitSampleCount(of frameCount: Int) -> Int {
