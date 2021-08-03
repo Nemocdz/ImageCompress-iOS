@@ -7,7 +7,11 @@
 
 import Foundation
 import ImageIO
+#if os(iOS)
+import MobileCoreServices.UTCoreTypes
+#elseif os(macOS)
 import CoreServices.LaunchServices.UTCoreTypes
+#endif
 import struct AVFoundation.AVFileType
 
 public extension ImageCompress {
