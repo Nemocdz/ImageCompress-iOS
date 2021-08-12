@@ -69,17 +69,17 @@ public extension ImageCompress {
         let options = [kCGImageSourceThumbnailMaxPixelSize: limitLongWidth, kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceShouldCacheImmediately: true, kCGImageSourceCreateThumbnailFromImageAlways: true] as CFDictionary
 
         if frameCount > 1 {
-            // 计算帧的间隔
-            let frameDurations = imageSource.frameDurations
-
-            // 每一帧都进行缩放
-            let resizedImageFrames = (0 ..< frameCount).compactMap { CGImageSourceCreateThumbnailAtIndex(imageSource, $0, options) }
-
-            // 每一帧都进行重新编码
-            zip(resizedImageFrames, frameDurations).forEach {
+            (0 ..< frameCount).forEach { index in
+                // 计算帧的间隔和缩放
+                guard let duration = imageSource.frameDuration(at: index),
+                      let resizeFrame = CGImageSourceCreateThumbnailAtIndex(imageSource, index, options) else {
+                    return
+                }
+                
                 // 设置帧间隔
-                let frameProperties = [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: $1, kCGImagePropertyGIFUnclampedDelayTime: $1]]
-                CGImageDestinationAddImage(imageDestination, $0, frameProperties as CFDictionary)
+                let frameProperties = [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: duration, kCGImagePropertyGIFUnclampedDelayTime: duration]]
+                // 每一帧都进行重新编码
+                CGImageDestinationAddImage(imageDestination, resizeFrame, frameProperties as CFDictionary)
             }
         } else {
             guard let resizedImageFrame = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, options) else {
@@ -282,54 +282,5 @@ extension ImageCompress {
         default:
             return 1
         }
-    }
-}
-
-extension Data {
-    var imageFrameCount: Int {
-        guard let imageSource = CGImageSourceCreateWithData(self as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) else {
-            return 1
-        }
-
-        return CGImageSourceGetCount(imageSource)
-    }
-
-    var imageSize: CGSize {
-        guard let imageSource = CGImageSourceCreateWithData(self as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
-              let properties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [AnyHashable: Any],
-              let imageHeight = properties[kCGImagePropertyPixelHeight] as? CGFloat,
-              let imageWidth = properties[kCGImagePropertyPixelWidth] as? CGFloat
-        else {
-            return .zero
-        }
-        return CGSize(width: imageWidth, height: imageHeight)
-    }
-}
-
-fileprivate extension CGImageSource {
-    func frameDuration(at index: Int) -> Double {
-        var frameDuration = Double(0.1)
-        guard let frameProperties = CGImageSourceCopyPropertiesAtIndex(self, index, nil) as? [AnyHashable: Any], let gifProperties = frameProperties[kCGImagePropertyGIFDictionary] as? [AnyHashable: Any] else {
-            return frameDuration
-        }
-
-        if let unclampedDuration = gifProperties[kCGImagePropertyGIFUnclampedDelayTime] as? NSNumber {
-            frameDuration = unclampedDuration.doubleValue
-        } else {
-            if let clampedDuration = gifProperties[kCGImagePropertyGIFDelayTime] as? NSNumber {
-                frameDuration = clampedDuration.doubleValue
-            }
-        }
-
-        if frameDuration < 0.011 {
-            frameDuration = 0.1
-        }
-
-        return frameDuration
-    }
-
-    var frameDurations: [Double] {
-        let frameCount = CGImageSourceGetCount(self)
-        return (0 ..< frameCount).map { frameDuration(at: $0) }
     }
 }
