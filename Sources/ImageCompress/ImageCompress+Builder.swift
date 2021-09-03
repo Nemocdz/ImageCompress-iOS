@@ -189,12 +189,16 @@ public extension ImageCompress.Builder {
         
         switch compressType {
         case .size(let size):
-            // 若有 DPI，先设置 DPI 为默认值
-            var resultData = try Builder(data: data)
-                .set(dpi: dpi ?? Self.defaultDPI)
-                .finalize()
-
-            // 若是 JPEG/HEIC，先用压缩系数压缩 6 次，二分法
+            var resultData = data
+            
+            // 若支持 DPI，先设置 DPI 为默认值
+            if Self.isSupportDPI(of: inputFormat) {
+                resultData = try Builder(data: data)
+                    .set(dpi: dpi ?? Self.defaultDPI)
+                    .finalize()
+            }
+            
+            // 若支持压缩系数，先用压缩系数压缩 6 次，二分法
             if Self.isSupportQualityCompression(of: inputFormat) {
                 if let quality = quality {
                     resultData = try Builder(data: data)
@@ -223,7 +227,7 @@ public extension ImageCompress.Builder {
                 }
             }
 
-            // 若是 GIF，先用抽帧减少大小
+            // 若支持抽帧，先用抽帧减少大小
             if Self.isSupportSampleCount(of: inputFormat) {
                 let sampleCount = sampleCount ?? Self.fitSampleCount(of: resultData.imageFrameCount)
                 resultData = try Builder(data: data)
@@ -239,7 +243,9 @@ public extension ImageCompress.Builder {
             while resultData.count > size {
                 let ratio = sqrt(CGFloat(size) / CGFloat(resultData.count))
                 longWidth *= ratio
-                resultData = try ImageCompress.compressImageData(resultData, limitLongWidth: longWidth)
+                resultData = try Builder(data: data)
+                    .set(limitLongWidth: longWidth)
+                    .finalize()
             }
             return resultData
         case .width(let width):
