@@ -1,4 +1,7 @@
 import XCTest
+#if canImport(UIKit)
+import UIKit
+#endif
 @testable import ImageCompress
 
 final class ImageCompressTests: XCTestCase {
@@ -15,6 +18,11 @@ final class ImageCompressTests: XCTestCase {
         do {
             let result = try ImageCompress.compressImageData(raw, limitLongWidth: raw.testLongWidth)
             XCTAssert(result.imageSize.small(than: raw.testLongWidth))
+            let result1 = try ImageCompress
+                .build(of: raw)
+                .set(limitLongWidth: raw.testLongWidth)
+                .finalize()
+            XCTAssert(result1.imageSize.small(than: raw.testLongWidth))
         } catch {
             assertError(error)
         }
@@ -24,6 +32,11 @@ final class ImageCompressTests: XCTestCase {
         do {
             let result = try ImageCompress.compressImageData(raw, limitDataSize: raw.testDataCount)
             XCTAssert(result.count < raw.testDataCount)
+            let result1 = try ImageCompress
+                .build(of: raw)
+                .set(limitSize: raw.testDataCount)
+                .finalize()
+            XCTAssert(result1.count < raw.testDataCount)
         } catch {
             assertError(error)
         }
@@ -33,6 +46,11 @@ final class ImageCompressTests: XCTestCase {
         do {
             let result = try ImageCompress.compressImageData(raw, quality: 0)
             XCTAssert(result.count <= raw.count)
+            let result1 = try ImageCompress
+                .build(of: raw)
+                .set(quality: 0)
+                .finalize()
+            XCTAssert(result1.count <= raw.count)
         } catch {
             assertError(error)
         }
@@ -43,6 +61,11 @@ final class ImageCompressTests: XCTestCase {
             let dpi = ImageCompress.defaultDPI
             let result = try ImageCompress.changeDPI(of: raw, dpi: dpi)
             XCTAssertEqual(result.imageDPI, dpi)
+            let result1 = try ImageCompress
+                .build(of: raw)
+                .set(dpi: dpi)
+                .finalize()
+            XCTAssertEqual(result1.imageDPI, dpi)
         } catch {
             assertError(error)
         }
@@ -68,6 +91,11 @@ final class ImageCompressTests: XCTestCase {
             do {
                 let result = try ImageCompress.compressImageData(raw, sampleCount: 2)
                 XCTAssert(result.imageFrameCount < raw.imageFrameCount)
+                let result1 = try ImageCompress
+                    .build(of: raw)
+                    .set(sampleCount: 2)
+                    .finalize()
+                XCTAssert(result1.imageFrameCount < raw.imageFrameCount)
             } catch {
                 assertError(error)
             }
@@ -97,7 +125,11 @@ final class ImageCompressTests: XCTestCase {
             do {
                 let result = try ImageCompress.changeImageFormat(of: raw, format: to)
                 XCTAssertEqual(result.imageFormat, to)
-                print("change format from \(from) data length:\(raw.count), to \(to) data length:\(result.count)")
+                let result1 = try ImageCompress
+                    .build(of: raw)
+                    .set(format: to)
+                    .finalize()
+                XCTAssertEqual(result1.imageFormat, to)
             } catch {
                 assertError(error)
             }

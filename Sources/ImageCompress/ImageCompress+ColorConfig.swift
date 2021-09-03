@@ -14,7 +14,6 @@ public extension ImageCompress {
         case rgb565
         case argb8888
         case rgbaF16
-        case unknown // 其余色彩配置
     }
 }
 
@@ -27,13 +26,11 @@ public extension ImageCompress {
     /// - Throws: ImageCompress.Error
     /// - Returns: 处理后数据
     static func changeColor(of rawData: Data, config: ColorConfig) throws -> Data {
-        guard isSupportColorConfig(of: rawData) else {
+        guard let imageForamt = rawData.imageFormat, isSupportColorConfig(of: imageForamt) else {
             throw Error.unsupportedFormat
         }
-
-        guard let imageConfig = config.imageConfig else {
-            throw Error.unsupportedColorConfig
-        }
+        
+        let imageConfig = config.imageConfig
 
         guard let imageSource = CGImageSourceCreateWithData(rawData as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
               let writeData = CFDataCreateMutable(nil, 0),
@@ -74,11 +71,11 @@ public extension ImageCompress {
     ///
     /// - Parameter rawData: 原始图片数据
     /// - Returns: 色彩配置
-    static func colorConfig(of rawData: Data) -> ColorConfig {
+    static func colorConfig(of rawData: Data) -> ColorConfig? {
         guard let imageSource = CGImageSourceCreateWithData(rawData as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
               let imageFrame = CGImageSourceCreateImageAtIndex(imageSource, 0, nil)
         else {
-            return .unknown
+            return nil
         }
 
         return imageFrame.colorConfig
@@ -86,10 +83,9 @@ public extension ImageCompress {
 }
 
 extension ImageCompress {
-    static func isSupportColorConfig(of data: Data) -> Bool {
-        guard let imageFormat = data.imageFormat else { return false }
+    static func isSupportColorConfig(of format: ImageFormat) -> Bool {
         let supportedFormats: Set<ImageFormat> = [.jpeg, .heic, .png]
-        return supportedFormats.contains(imageFormat)
+        return supportedFormats.contains(format)
     }
 }
 
@@ -100,7 +96,7 @@ private extension ImageCompress.ColorConfig {
         let bitmapInfo: CGBitmapInfo
     }
 
-    var imageConfig: CGImageConfig? {
+    var imageConfig: CGImageConfig {
         switch self {
         case .alpha8:
             return CGImageConfig(bitsPerComponent: 8, bitsPerPixel: 8, bitmapInfo: CGBitmapInfo(.alphaOnly))
@@ -110,22 +106,17 @@ private extension ImageCompress.ColorConfig {
             return CGImageConfig(bitsPerComponent: 8, bitsPerPixel: 32, bitmapInfo: CGBitmapInfo(.premultipliedFirst))
         case .rgbaF16:
             return CGImageConfig(bitsPerComponent: 16, bitsPerPixel: 64, bitmapInfo: CGBitmapInfo(.premultipliedLast, true))
-        case .unknown:
-            return nil
         }
     }
 }
 
 private extension CGImage {
-    var colorConfig: ImageCompress.ColorConfig {
-        return ImageCompress.ColorConfig.allCases.first(where: { isColorConfig($0) }) ?? .unknown
+    var colorConfig: ImageCompress.ColorConfig? {
+        return ImageCompress.ColorConfig.allCases.first(where: { isColorConfig($0) })
     }
 
     func isColorConfig(_ colorConfig: ImageCompress.ColorConfig) -> Bool {
-        guard let imageConfig = colorConfig.imageConfig else {
-            return false
-        }
-
+        let imageConfig = colorConfig.imageConfig
         if bitsPerComponent == imageConfig.bitsPerComponent,
            bitsPerPixel == imageConfig.bitsPerPixel,
            imageConfig.bitmapInfo.contains(CGBitmapInfo(alphaInfo)),

@@ -32,22 +32,9 @@ public extension ImageCompress {
     /// - Throws: ImageCompress.Error
     /// - Returns: 处理后数据
     static func changeImageFormat(of rawData: Data, format: ImageFormat) throws -> Data {
-        guard let imageSource = CGImageSourceCreateWithData(rawData as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
-              let writeData = CFDataCreateMutable(nil, 0),
-              let imageType = CGImageSourceGetType(imageSource)
-        else {
-            throw Error.imageIOError(.sourceMissing)
-        }
-
-        guard let imageDestination = CGImageDestinationCreateWithData(writeData, format.uniformTypeIdentifer as CFString, 1, nil) else {
-            throw Error.imageIOError(.destinationMissing(type: imageType as String))
-        }
-
-        CGImageDestinationAddImageFromSource(imageDestination, imageSource, 0, nil)
-        guard CGImageDestinationFinalize(imageDestination) else {
-            throw Error.imageIOError(.destinationFinalizeFail)
-        }
-        return writeData as Data
+        try build(of: rawData)
+            .set(format: format)
+            .finalize()
     }
 
     /// 获取图片格式
