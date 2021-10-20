@@ -94,7 +94,10 @@ public extension ImageCompress.Builder {
         return self
     }
     
-    func set(format: ImageFormat) -> Builder {
+    func set(format: ImageFormat) throws -> Builder {
+        guard Self.isSupportWrite(of: format) else {
+            throw Error.unsupportedFormat
+        }
         outputFormat = format
         return self
     }
@@ -291,6 +294,11 @@ extension ImageCompress.Builder {
     
     static func isSupportDPI(of format: ImageFormat) -> Bool {
         let supportFormats: Set<ImageFormat> = [.jpeg, .png]
+        return supportFormats.contains(format)
+    }
+    
+    static func isSupportWrite(of format: ImageFormat) -> Bool {
+        let supportFormats: Set<ImageFormat> = [.jpeg, .png, .gif, .heic]
         return supportFormats.contains(format)
     }
 

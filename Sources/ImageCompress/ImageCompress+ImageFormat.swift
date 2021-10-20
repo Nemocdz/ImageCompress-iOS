@@ -43,6 +43,13 @@ public extension ImageCompress {
     static func imageFormat(of rawData: Data) -> ImageFormat? {
         return rawData.imageFormat
     }
+        
+    /// 图片格式是否支持写入
+    /// - Parameter format: 图片格式
+    /// - Returns: 是否支持
+    static func isSupportWrite(of format: ImageFormat) -> Bool {
+        return Builder.isSupportWrite(of: format)
+    }
 }
 
 extension Data {
