@@ -167,6 +167,7 @@ fileprivate extension ImageCompress.ImageFormat {
         case .gif: return "gif"
         case .heic: return "heic"
         case .dng: return "dng"
+        case .webp: return "webp"
         }
     }
 }

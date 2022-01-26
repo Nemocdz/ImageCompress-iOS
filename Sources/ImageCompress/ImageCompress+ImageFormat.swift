@@ -21,6 +21,7 @@ public extension ImageCompress {
         case gif
         case heic
         case dng
+        case webp
     }
 }
 
@@ -71,8 +72,26 @@ extension Data {
             return .heic
         } else if headerData.hasPrefix([0x4D, 0x4D, 0x00, 0x2A]) || headerData.hasPrefix([0x49, 0x49, 0x00, 0x2A]) {
             return .dng
+        } else if isWebPFormat {
+            return .webp
         }
         return nil
+    }
+}
+
+private extension Data {
+    var isWebPFormat: Bool {
+        if count < 12 {
+            return false
+        }
+        
+        let endIndex = index(startIndex, offsetBy: 12)
+        let testData = subdata(in: startIndex..<endIndex)
+        guard let testString = String(data: testData, encoding: .ascii) else {
+            return false
+        }
+        
+        return testString.hasPrefix("RIFF") && testString.hasSuffix("WEBP")
     }
 
     var isHeicFormat: Bool {
@@ -103,6 +122,8 @@ extension ImageCompress.ImageFormat {
             return kUTTypeJPEG as String
         case .dng:
             return AVFileType.dng.rawValue
+        case .webp:
+            return "org.webmproject.webp"
         }
     }
 }
